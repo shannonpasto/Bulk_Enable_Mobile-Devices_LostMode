@@ -1,38 +1,10 @@
 #!/bin/sh
 
-####################################################################################################
-#
-# Copyright (c) 2015, JAMF Software, LLC.  All rights reserved.
-#
-#       Redistribution and use in source and binary forms, with or without
-#       modification, are permitted provided that the following conditions are met:
-#               * Redistributions of source code must retain the above copyright
-#                 notice, this list of conditions and the following disclaimer.
-#               * Redistributions in binary form must reproduce the above copyright
-#                 notice, this list of conditions and the following disclaimer in the
-#                 documentation and/or other materials provided with the distribution.
-#               * Neither the name of the JAMF Software, LLC nor the
-#                 names of its contributors may be used to endorse or promote products
-#                 derived from this software without specific prior written permission.
-#
-#       THIS SOFTWARE IS PROVIDED BY JAMF SOFTWARE, LLC "AS IS" AND ANY
-#       EXPRESSED OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-#       WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-#       DISCLAIMED. IN NO EVENT SHALL JAMF SOFTWARE, LLC BE LIABLE FOR ANY
-#       DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-#       (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-#       LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-#       ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-#       (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-#       SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-####################################################################################################
-
 ###################
 # bulk_enable_mobile-devices_lostmode-pro.sh - script to bulk enable lost mode for mobile devices via the pro API
 # Shannon Pasto https://github.com/shannonpasto/Bulk_Enable_Mobile-Devices_LostMode
 #
-# v1.0 (14/11/2025)
+# v1.1 (14/11/2025)
 ###################
 
 ## uncomment the next line to output debugging to stdout
@@ -58,6 +30,7 @@ play_lost_mode_sound="false"  # set to true to play the lost mode sound
 ###############################################################################
 ## function declarations
 
+
 ###############################################################################
 ## start the script here
 
@@ -69,10 +42,21 @@ play_lost_mode_sound="false"  # set to true to play the lost mode sound
 encodedCredentials=$(printf '%s:%s' "${username}" "${password}" | /usr/bin/iconv -t ISO-8859-1 | /usr/bin/base64 -i -)
 
 # Generate an auth token
-token=$(/usr/bin/curl -sk "${url}/api/v1/auth/token" -X POST -H "Authorization: Basic ${encodedCredentials}"| /usr/bin/jq -r '.token')
+if [ "$(/usr/bin/sw_vers -buildVersion | /usr/bin/cut -c 1-2 -)" -ge 24 ]; then
+  token=$(/usr/bin/curl -sk "${url}/api/v1/auth/token" -X POST -H "Authorization: Basic ${encodedCredentials}" | /usr/bin/jq -r '.token')
+else
+  token=$(/usr/bin/curl -sk "${url}/api/v1/auth/token" -X POST -H "Authorization: Basic ${encodedCredentials}" | /usr/bin/plutil -extract token raw -o - -)
+fi
+
+build the list
+if [ "$(/usr/bin/sw_vers -buildVersion | /usr/bin/cut -c 1-2 -)" -ge 24 ]; then
+  manIDList=$(/usr/bin/curl -X 'GET' "${url}/api/v2/mobile-devices/detail?section=GENERAL&page=0&page-size=100&sort=displayName%3Aasc&filter=groupId%3D%3D${groupID}" -H 'accept: application/json' -H "Authorization: Bearer ${token}" | /usr/bin/jq -r '.results[].general.managementId')
+else
+  manIDList=$(/usr/bin/curl -X 'GET' "${url}/api/v2/mobile-devices/detail?section=GENERAL&page=0&page-size=100&sort=displayName%3Aasc&filter=groupId%3D%3D${groupID}" -H 'accept: application/json' -H "Authorization: Bearer ${token}" | /usr/bin/grep managementId | /usr/bin/cut -d \" -f 4 -)
+fi
 
 # send the command to activate lost mode
-for theManID in $(/usr/bin/curl -X 'GET' "${url}/api/v2/mobile-devices/detail?section=GENERAL&page=0&page-size=100&sort=displayName%3Aasc&filter=groupId%3D%3D${groupID}" -H 'accept: application/json' -H "Authorization: Bearer ${token}" | /usr/bin/jq -r '.results[].general.managementId'); do
+for theManID in ${manIDList}; do
   /usr/bin/curl -s "${url}/api/v2/mdm/commands" -H 'Content-Type: application/json' -H "Authorization: Bearer ${token}" \
 --data "{
   \"clientData\": [
@@ -108,6 +92,7 @@ for theManID in $(/usr/bin/curl -X 'GET' "${url}/api/v2/mobile-devices/detail?se
     ;;
     
   esac
+  sleep 1
 done
 
 # invalidate the token
