@@ -55,6 +55,12 @@ lost_mode_phone="555-555-5555"
 lost_mode_footnote="This is an optional footnote"
 play_lost_mode_sound="false"  # set to true to play the lost mode sound
 
+###############################################################################
+## function declarations
+
+###############################################################################
+## start the script here
+
 ########################################
 ###### DON'T EDIT BELOW THIS LINE ######
 ########################################
